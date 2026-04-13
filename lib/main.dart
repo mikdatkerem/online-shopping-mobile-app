@@ -1,122 +1,253 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import 'models/product_model.dart';
+import 'services/api_service.dart';
+import 'views/cart_screen.dart';
+import 'views/home_screen.dart';
+import 'views/product_detail_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const MobileShoppingApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MobileShoppingApp extends StatelessWidget {
+  const MobileShoppingApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
+    const primary = Color(0xFF9B2739);
+    const secondary = Color(0xFF279B8A);
+    const background = Color(0xFFD9D9D9);
+    const dark = Color(0xFF1A1C1E);
+
+    final baseTextTheme = GoogleFonts.soraTextTheme();
+    final scheme = ColorScheme(
+      brightness: Brightness.light,
+      primary: primary,
+      onPrimary: Colors.white,
+      secondary: secondary,
+      onSecondary: Colors.white,
+      error: const Color(0xFFB3261E),
+      onError: Colors.white,
+      surface: background,
+      onSurface: dark,
+      onSurfaceVariant: const Color(0xFF5D6267),
+      outline: const Color(0xFFB7B3AD),
+      outlineVariant: const Color(0xFFD4CFC9),
+      shadow: Colors.black,
+      scrim: Colors.black54,
+      inverseSurface: dark,
+      onInverseSurface: Colors.white,
+      inversePrimary: const Color(0xFFE7B4BD),
+      surfaceTint: primary,
+    );
+
     return MaterialApp(
-      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
+      title: 'Shopping',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: scheme,
+        scaffoldBackgroundColor: background,
+        useMaterial3: true,
+        textTheme: baseTextTheme.apply(bodyColor: dark, displayColor: dark),
+        appBarTheme: AppBarTheme(
+          backgroundColor: background,
+          foregroundColor: dark,
+          titleTextStyle: baseTextTheme.titleLarge?.copyWith(
+            color: dark,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          hintStyle: baseTextTheme.bodyMedium?.copyWith(
+            color: const Color(0xFF7A7F85),
+          ),
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: Colors.white,
+          indicatorColor: primary.withValues(alpha: 0.12),
+          labelTextStyle: WidgetStateProperty.resolveWith(
+            (states) => baseTextTheme.labelMedium?.copyWith(
+              color: states.contains(WidgetState.selected) ? primary : dark,
+              fontWeight: states.contains(WidgetState.selected)
+                  ? FontWeight.w700
+                  : FontWeight.w600,
+            ),
+          ),
+          iconTheme: WidgetStateProperty.resolveWith(
+            (states) => IconThemeData(
+              color: states.contains(WidgetState.selected) ? primary : dark,
+            ),
+          ),
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const StoreRoot(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class StoreRoot extends StatefulWidget {
+  const StoreRoot({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<StoreRoot> createState() => _StoreRootState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _StoreRootState extends State<StoreRoot> {
+  final ApiService _apiService = ApiService();
+  final Map<int, int> _cartQuantities = <int, int>{};
+  final Set<int> _favoriteIds = <int>{};
+  final ValueNotifier<int> _cartCountNotifier = ValueNotifier<int>(0);
 
-  void _incrementCounter() {
+  late Future<List<ProductModel>> _productsFuture;
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _productsFuture = _apiService.fetchProducts();
+  }
+
+  int get _cartCount =>
+      _cartQuantities.values.fold<int>(0, (sum, quantity) => sum + quantity);
+
+  @override
+  void dispose() {
+    _cartCountNotifier.dispose();
+    super.dispose();
+  }
+
+  void _syncCartCount() {
+    _cartCountNotifier.value = _cartCount;
+  }
+
+  void _addToCart(ProductModel product) {
     setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+      _cartQuantities.update(
+        product.id,
+        (value) => value + 1,
+        ifAbsent: () => 1,
+      );
     });
+    _syncCartCount();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${product.title} sepete eklendi.'),
+        duration: const Duration(milliseconds: 900),
+      ),
+    );
+  }
+
+  void _toggleFavorite(ProductModel product) {
+    setState(() {
+      if (_favoriteIds.contains(product.id)) {
+        _favoriteIds.remove(product.id);
+      } else {
+        _favoriteIds.add(product.id);
+      }
+    });
+  }
+
+  String _formatCurrency(double value) {
+    final fixed = value.toStringAsFixed(2).replaceAll('.', ',');
+    return '$fixed TL';
+  }
+
+  Future<void> _openCart(List<ProductModel> products) async {
+    final updatedQuantities = await Navigator.of(context).push<Map<int, int>>(
+      MaterialPageRoute<Map<int, int>>(
+        builder: (_) => CartScreen(
+          allProducts: products,
+          initialQuantities: _cartQuantities,
+          formatCurrency: _formatCurrency,
+        ),
+      ),
+    );
+
+    if (updatedQuantities == null) {
+      return;
+    }
+
+    setState(() {
+      _cartQuantities
+        ..clear()
+        ..addAll(updatedQuantities);
+    });
+    _syncCartCount();
+  }
+
+  void _openDetails(ProductModel product, List<ProductModel> products) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ProductDetailScreen(
+          product: product,
+          onAddToCart: () => _addToCart(product),
+          onOpenCart: () => _openCart(products),
+          cartCountListenable: _cartCountNotifier,
+          formatCurrency: _formatCurrency,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+    return FutureBuilder<List<ProductModel>>(
+      future: _productsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.cloud_off_rounded, size: 52),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Veriler yuklenirken bir sorun olustu.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: () {
+                        setState(() {
+                          _productsFuture = _apiService.fetchProducts();
+                        });
+                      },
+                      child: const Text('Tekrar Dene'),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+          );
+        }
+
+        final products = snapshot.data ?? <ProductModel>[];
+
+        return HomeScreen(
+          products: products,
+          searchQuery: _searchQuery,
+          onSearchChanged: (value) => setState(() => _searchQuery = value),
+          onProductTap: (product) => _openDetails(product, products),
+          onAddToCart: _addToCart,
+          onOpenCart: () => _openCart(products),
+          cartCount: _cartCount,
+          favoriteIds: _favoriteIds,
+          onFavoriteToggle: _toggleFavorite,
+          formatCurrency: _formatCurrency,
+        );
+      },
     );
   }
 }
